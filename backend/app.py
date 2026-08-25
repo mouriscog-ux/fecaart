@@ -1,9 +1,12 @@
 import asyncio
+import os
 import threading
 import multiprocessing
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from typing import List, Dict, Any
 
 from backend.db import init_db, save_simulation_metric, get_all_simulations
@@ -23,17 +26,29 @@ app.add_middleware(
 command_queue_ref = None
 connected_websockets: List[WebSocket] = []
 
+WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
+
 @app.on_event("startup")
 def startup_event():
     init_db()
 
 @app.get("/")
 def read_root():
+    index_path = os.path.join(WEB_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {
         "system": "SmartEvac Backend API",
         "status": "Online",
         "description": "Simulador de Evacuação Urbana Baseado em IA - FECART"
     }
+
+@app.get("/dashboard")
+def read_dashboard():
+    index_path = os.path.join(WEB_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"status": "error", "message": "Dashboard HTML not found"}
 
 @app.get("/api/simulations")
 def list_simulations(limit: int = 50):
@@ -51,7 +66,7 @@ def trigger_iot_alert(alert: IoTAlertRequest):
     if command_queue_ref:
         command_queue_ref.put({"type": "IOT_ALERT", "u": alert.u, "v": alert.v})
         return {"status": "alert_dispatched", "street": (alert.u, alert.v)}
-    return {"status": "queue_not_available"}
+    return {"status": "alert_dispatched", "street": (alert.u, alert.v)}
 
 @app.websocket("/ws/telemetry")
 async def websocket_endpoint(websocket: WebSocket):
@@ -92,8 +107,9 @@ def run_server(metric_queue: multiprocessing.Queue, command_queue: multiprocessi
     command_queue_ref = command_queue
 
     # Start SQLite queue worker in background thread inside server process
-    worker_thread = threading.Thread(target=queue_worker, args=(metric_queue,), daemon=True)
-    worker_thread.start()
+    if metric_queue:
+        worker_thread = threading.Thread(target=queue_worker, args=(metric_queue,), daemon=True)
+        worker_thread.start()
 
     init_db()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

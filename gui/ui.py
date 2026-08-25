@@ -1,8 +1,9 @@
 import pygame
 import random
 import time
+import math
 import multiprocessing
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from core.graph import UrbanGraph, create_sample_city_graph
 from core.hazard import HazardManager
@@ -14,7 +15,7 @@ from gui.widgets import Button, Slider, MetricCard, COLOR_ACCENT_BLUE, COLOR_ACC
 class UIApp:
     def __init__(self, metric_queue: Optional[multiprocessing.Queue] = None, command_queue: Optional[multiprocessing.Queue] = None):
         pygame.init()
-        pygame.display.set_caption("SmartEvac - Simulador de Evacuação Urbana Baseado em IA (FECART)")
+        pygame.display.set_caption("SmartEvac - Simulador Interativo de Evacuação Urbana (FECART)")
         self.screen = pygame.display.set_mode((1280, 720))
         self.clock = pygame.time.Clock()
 
@@ -42,7 +43,6 @@ class UIApp:
 
         self.agents: List[Agent] = []
         self.simulation_time = 0.0
-        self.naive_benchmark_time = 0.0
 
         # Create GUI Widgets
         self.init_widgets()
@@ -105,13 +105,60 @@ class UIApp:
         else:
             self.btn_mode.text = "🚶 MODO: Sem IA (Ingênuo)"
             self.btn_mode.bg_color = (180, 80, 50)
-        self.reset_simulation()
+        # Recalculate paths for active agents
+        for agent in self.agents:
+            if not agent.evacuated:
+                self.scheduler.request_repath(agent)
 
     def start_sim(self):
         self.paused = False
 
     def pause_sim(self):
         self.paused = True
+
+    def handle_map_click(self, pos: Tuple[int, int], button: int):
+        mx, my = pos
+        # Check if click is inside Central Map Panel
+        if not self.renderer.map_rect.collidepoint(mx, my):
+            return
+
+        if button == 1:
+            # Left Click: Toggle Street Edge blockage closest to click
+            min_dist = 25.0
+            target_edge = None
+            for (u, v), edge in self.graph.edges.items():
+                nu = self.graph.nodes[u]
+                nv = self.graph.nodes[v]
+                dist = self.point_to_segment_distance(mx, my, nu.x, nu.y, nv.x, nv.y)
+                if dist < min_dist:
+                    min_dist = dist
+                    target_edge = edge
+
+            if target_edge:
+                target_edge.blocked = not target_edge.blocked
+                rev_edge = self.graph.get_edge(target_edge.v, target_edge.u)
+                if rev_edge:
+                    rev_edge.blocked = target_edge.blocked
+
+                for agent in self.agents:
+                    if not agent.evacuated:
+                        self.scheduler.request_repath(agent)
+
+        elif button == 3:
+            # Right Click: Spawn Hazard epicentre at clicked position
+            self.hazard_mgr.spawn_hazard(mx, my, self.disaster_type)
+            for agent in self.agents:
+                if not agent.evacuated:
+                    self.scheduler.request_repath(agent)
+
+    def point_to_segment_distance(self, px, py, x1, y1, x2, y2) -> float:
+        l2 = (x2 - x1)**2 + (y2 - y1)**2
+        if l2 == 0:
+            return math.hypot(px - x1, py - y1)
+        t = max(0, min(1, ((px - x1)*(x2 - x1) + (py - y1)*(y2 - y1)) / l2))
+        proj_x = x1 + t * (x2 - x1)
+        proj_y = y1 + t * (y2 - y1)
+        return math.hypot(px - proj_x, py - proj_y)
 
     def trigger_random_iot_alert(self, u: Optional[int] = None, v: Optional[int] = None):
         """Injects dynamic street blockage to simulate street IoT sensor alerts."""
@@ -125,10 +172,8 @@ class UIApp:
 
         if u is not None and v is not None:
             self.hazard_mgr.inject_iot_alert(u, v)
-            # Event-driven repath for agents using this street
             for agent in self.agents:
-                curr_edge = agent.get_current_edge()
-                if curr_edge and (curr_edge == (u, v) or curr_edge == (v, u) or agent.path):
+                if not agent.evacuated:
                     self.scheduler.request_repath(agent)
 
     def reset_simulation(self):
@@ -154,7 +199,6 @@ class UIApp:
         for i in range(self.num_agents):
             start_node = random.choice(non_shelter_nodes)
             agent = Agent(i + 1, start_node, self.graph)
-            # Initial A* / Naive Path calculation
             path, visited = self.planner.find_path(start_node, is_ai_mode=self.is_ai_mode)
             agent.set_path(path)
             agent.last_transparency_nodes = visited
@@ -188,7 +232,6 @@ class UIApp:
         # Event-driven repath check & Staggered A* processing
         for agent in self.agents:
             if not agent.evacuated and not agent.trapped:
-                # Event trigger: agent path blocked or heavy congestion spike
                 if agent.needs_repath:
                     self.scheduler.request_repath(agent)
 
@@ -201,10 +244,8 @@ class UIApp:
             if not agent.evacuated:
                 active_count += 1
 
-        # Auto-pause when all agents evacuated
         if active_count == 0 and len(self.agents) > 0:
             self.paused = True
-            # Send metrics asynchronously to SQLite backend worker
             self.dispatch_metrics_to_backend()
 
     def dispatch_metrics_to_backend(self):
@@ -214,8 +255,6 @@ class UIApp:
         evacuated_agents = [a for a in self.agents if a.evacuated]
         avg_time = sum(a.time_spent for a in evacuated_agents) / max(1, len(evacuated_agents))
         evac_rate = (len(evacuated_agents) / max(1, len(self.agents))) * 100.0
-
-        # Calculate max edge congestion ratio
         max_cong = max((e.current_agents / e.capacity) * 100.0 for e in self.graph.edges.values()) if self.graph.edges else 0.0
 
         metric_payload = {
@@ -238,7 +277,6 @@ class UIApp:
         avg_time = sum(a.time_spent for a in evacuated) / max(1, len(evacuated)) if evacuated else 0.0
         evac_rate = (len(evacuated) / max(1, len(self.agents))) * 100.0
 
-        # Congestion Index
         total_cong = sum((e.current_agents / e.capacity) for e in self.graph.edges.values())
         avg_cong = (total_cong / max(1, len(self.graph.edges))) * 100.0
 
@@ -253,10 +291,8 @@ class UIApp:
             self.card_performance.update("MODO INGÊNUO", "", "Sem Otimização A*")
 
     def draw(self):
-        # Draw 3 layout panels
         self.renderer.draw_panels()
 
-        # Draw Graph, Hazards, Transparency & Agents
         self.renderer.draw_graph()
         self.renderer.draw_hazards(self.hazard_mgr)
 
@@ -266,7 +302,6 @@ class UIApp:
         self.renderer.draw_agents(self.agents)
         self.renderer.draw_legend()
 
-        # Draw Controls Widgets
         self.btn_fire.draw(self.screen, self.font_btn)
         self.btn_flood.draw(self.screen, self.font_btn)
         self.btn_gas.draw(self.screen, self.font_btn)
@@ -280,7 +315,6 @@ class UIApp:
 
         self.btn_iot.draw(self.screen, self.font_btn)
 
-        # Draw Bottom Metric Cards
         self.update_metrics_display()
         self.card_total_time.draw(self.screen, self.font_card_title, self.font_card_val)
         self.card_avg_time.draw(self.screen, self.font_card_title, self.font_card_val)
@@ -295,15 +329,21 @@ class UIApp:
                 if event.type == pygame.QUIT:
                     self.running = False
 
-                self.btn_fire.handle_event(event)
-                self.btn_flood.handle_event(event)
-                self.btn_gas.handle_event(event)
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    handled = (
+                        self.btn_fire.handle_event(event) or
+                        self.btn_flood.handle_event(event) or
+                        self.btn_gas.handle_event(event) or
+                        self.btn_mode.handle_event(event) or
+                        self.btn_start.handle_event(event) or
+                        self.btn_pause.handle_event(event) or
+                        self.btn_reset.handle_event(event) or
+                        self.btn_iot.handle_event(event)
+                    )
+                    if not handled:
+                        self.handle_map_click(event.pos, event.button)
+
                 self.slider_pop.handle_event(event)
-                self.btn_mode.handle_event(event)
-                self.btn_start.handle_event(event)
-                self.btn_pause.handle_event(event)
-                self.btn_reset.handle_event(event)
-                self.btn_iot.handle_event(event)
 
             self.update()
             self.draw()

@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartEvac - Simulador de Evacuação Urbana Baseado em IA</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0b0f17',
+                        panelbg: '#141c28',
+                        cardbg: '#1e2736',
+                        accentblue: '#00a2ff',
+                        accentgreen: '#00dc82',
+                        accentred: '#ff4b4b',
+                        accentorange: '#ffa028',
+                        accentpurple: '#b45af0'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0b0f17; color: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; }
+        canvas { background-color: #121824; border-radius: 0.75rem; cursor: crosshair; }
+        .gradient-text { background: linear-gradient(135deg, #00a2ff, #00dc82); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .glow-btn { box-shadow: 0 0 25px rgba(0, 162, 255, 0.5); }
+        .step-card { transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen flex flex-col justify-between">
+
+    <!-- OVERLAY: INTERACTIVE STEP-BY-STEP TUTORIAL WIZARD -->
+    <div id="tutorial-modal" class="fixed inset-0 bg-darkbg/95 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="max-w-3xl w-full bg-panelbg border border-gray-800 rounded-2xl p-6 md:p-8 shadow-2xl relative flex flex-col justify-between min-h-[520px]">
+            
+            <!-- Top Header & Close Button -->
+            <div class="flex justify-between items-center border-b border-gray-800 pb-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-accentblue/20 text-accentblue rounded-lg text-xl">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold tracking-wide text-white">TUTORIAL PASSO A PASSO - SMARTEVAC</h2>
+                        <p class="text-xs text-gray-400">Aprenda como funciona a IA e como apresentar na feira</p>
+                    </div>
+                </div>
+                <button onclick="closeTutorial()" class="text-gray-400 hover:text-white text-lg px-3 py-1 rounded-lg bg-cardbg border border-gray-700">
+                    <i class="fa-solid fa-xmark"></i> Fechar
+                </button>
+            </div>
+
+            <!-- Wizard Progress Indicator -->
+            <div class="mb-6">
+                <div class="flex justify-between text-xs text-gray-400 font-bold mb-2">
+                    <span id="step-indicator-text">PASSO 1 DE 4</span>
+                    <span id="step-title-text" class="text-accentblue">🚨 O Cenário de Emergência</span>
+                </div>
+                <div class="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-accentblue transition-all duration-300 w-1/4"></div>
+                </div>
+            </div>
+
+            <!-- STEP CONTENT CARDS -->
+            <div class="flex-1 flex items-center mb-6">
+                
+                <!-- STEP 1: CENÁRIO DE EMERGÊNCIA -->
+                <div id="step-1" class="step-card w-full">
+                    <div class="bg-cardbg p-6 rounded-xl border border-gray-800">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="p-4 bg-red-500/20 text-red-500 rounded-xl text-3xl">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">1. O Cenário de Emergência Urbana</h3>
+                                <p class="text-xs text-gray-400">Crise em tempo real na cidade inteligente</p>
+                            </div>
+                        </div>
+                        <p class="text-xs md:text-sm text-gray-300 leading-relaxed mb-4">
+                            Imagine que ocorreu um <strong>Incêndio Florestal 🔥</strong>, uma <strong>Enchente Urbana 🌊</strong> ou um <strong>Vazamento de Gás Tóxico ☣️</strong> no centro da cidade.
+                        </p>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="bg-darkbg p-3 rounded-lg border border-gray-800 flex items-center gap-2">
+                                <span class="text-lg">🏥</span>
+                                <span><strong>Abrigos Seguros:</strong> Localizados nos 4 cantos da cidade com halos verdes.</span>
+                            </div>
+                            <div class="bg-darkbg p-3 rounded-lg border border-gray-800 flex items-center gap-2">
+                                <span class="text-lg">🔥</span>
+                                <span><strong>Focos de Perigo:</strong> Áreas que se expandem e bloqueiam ruas.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: DECISÃO HUMANA INGÊNUA -->
+                <div id="step-2" class="step-card w-full hidden">
+                    <div class="bg-cardbg p-6 rounded-xl border border-gray-800">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="p-4 bg-orange-500/20 text-orange-500 rounded-xl text-3xl">
+                                <i class="fa-solid fa-person-walking-arrow-loop-left"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">2. Por que a Decisão Humana Ingênua Falha?</h3>
+                                <p class="text-xs text-gray-400">O problema da rota geométrica curta sem visão de trânsito</p>
+                            </div>
+                        </div>
+                        <p class="text-xs md:text-sm text-gray-300 leading-relaxed mb-4">
+                            Em momentos de pânico, os humanos tentam ir direto pelo <strong>caminho visualmente mais curto</strong>. Porém, eles não sabem se a rua à frente está <strong>engarrafada</strong> ou <strong>bloqueada pelo fogo</strong>.
+                        </p>
+                        <div class="bg-red-500/10 border border-red-500/30 p-3 rounded-lg text-xs text-red-300 flex items-center gap-3">
+                            <i class="fa-solid fa-skull-crossbones text-xl text-red-400"></i>
+                            <span><strong>Consequência:</strong> Milhares de pessoas ficam presas no mesmo engarrafamento e são atingidas pelo desastre.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: SOLUÇÃO DA IA A* -->
+                <div id="step-3" class="step-card w-full hidden">
+                    <div class="bg-cardbg p-6 rounded-xl border border-gray-800">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="p-4 bg-accentgreen/20 text-accentgreen rounded-xl text-3xl">
+                                <i class="fa-solid fa-brain"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">3. Como a Inteligência Artificial A* Salva Vidas</h3>
+                                <p class="text-xs text-gray-400">Otimização dinâmica de impedância em grafos</p>
+                            </div>
+                        </div>
+                        <p class="text-xs md:text-sm text-gray-300 leading-relaxed mb-4">
+                            O cérebro de IA do <strong>SmartEvac</strong> monitora a quantidade de pessoas em cada rua e a propagação do desastre, recalculando rotas desobstruídas para <strong>Adultos 👨, Crianças 🧒, Idosos 👨‍🦳 e PCDs ♿</strong>.
+                        </p>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="bg-darkbg p-3 rounded-lg border border-gray-800 font-mono text-accentgreen">
+                                <strong>Ganho de Eficiência:</strong> Evacuação +38% mais rápida que rotas manuais.
+                            </div>
+                            <div class="bg-darkbg p-3 rounded-lg border border-gray-800 font-mono text-accentpurple">
+                                <strong>Prioridade PCD:</strong> Rotas acessíveis para pessoas de mobilidade reduziada.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 4: GUIA DE APRESENTAÇÃO NA FEIRA -->
+                <div id="step-4" class="step-card w-full hidden">
+                    <div class="bg-cardbg p-6 rounded-xl border border-gray-800">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="p-4 bg-accentpurple/20 text-accentpurple rounded-xl text-3xl">
+                                <i class="fa-solid fa-hand-pointer"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">4. Como Apresentar na Feira de IA</h3>
+                                <p class="text-xs text-gray-400">Demonstração prática e interativa no estande</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2.5 text-xs text-gray-300">
+                            <div class="p-2.5 bg-darkbg rounded-lg border border-gray-800 flex items-center gap-3">
+                                <span class="bg-accentorange text-white font-bold px-2 py-0.5 rounded">1</span>
+                                <span><strong>Clique em qualquer rua no mapa:</strong> Mostre que a via é bloqueada 🚧 e a IA redireciona as pessoas na hora.</span>
+                            </div>
+                            <div class="p-2.5 bg-darkbg rounded-lg border border-gray-800 flex items-center gap-3">
+                                <span class="bg-accentred text-white font-bold px-2 py-0.5 rounded">2</span>
+                                <span><strong>Alterne para "Sem IA":</strong> Mostre aos avaliadores como a população fica presa sem o sistema.</span>
+                            </div>
+                            <div class="p-2.5 bg-darkbg rounded-lg border border-gray-800 flex items-center gap-3">
+                                <span class="bg-accentpurple text-white font-bold px-2 py-0.5 rounded">3</span>
+                                <span><strong>Simular Sensor IoT:</strong> Mostre a integração com sensores urbanos inteligentes.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Navigation Buttons -->
+            <div class="flex justify-between items-center border-t border-gray-800 pt-4">
+                <button id="btn-prev" onclick="prevStep()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>
+                    <i class="fa-solid fa-arrow-left"></i> Anterior
+                </button>
+
+                <div class="flex gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-accentblue step-dot"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-gray-700 step-dot"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-gray-700 step-dot"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-gray-700 step-dot"></span>
+                </div>
+
+                <button id="btn-next" onclick="nextStep()" class="bg-accentblue hover:bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow">
+                    Próximo <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN SIMULATION DASHBOARD -->
+    <!-- Header Banner -->
+    <header class="bg-panelbg border border-gray-800 rounded-xl p-4 mb-4 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-3 bg-accentblue/20 text-accentblue rounded-lg text-2xl">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-wide flex items-center gap-2">
+                    SmartEvac <span class="text-xs bg-accentblue text-white px-2 py-0.5 rounded font-mono">FEIRA DE IA</span>
+                </h1>
+                <p class="text-xs text-gray-400">Simulador de Evacuação Urbana Baseado em Inteligência Artificial</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="openTutorial()" class="bg-accentblue/20 border border-accentblue text-accentblue hover:bg-accentblue hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow">
+                <i class="fa-solid fa-book-open"></i> 📚 Tutorial Passo a Passo
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+        
+        <!-- Left & Center: Canvas Map Simulation (8 Cols) -->
+        <div class="lg:col-span-8 bg-panelbg border border-gray-800 rounded-xl p-4 flex flex-col shadow-lg">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xs font-bold tracking-wider text-gray-300 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-map-location-dot text-accentblue"></i>
+                    Malha Viária Urbana Realista (Clique em uma rua para bloquear)
+                </h2>
+                <div class="flex items-center gap-2">
+                    <span id="click-mode-badge" class="text-xs font-bold px-2.5 py-1 rounded bg-accentorange/20 text-accentorange border border-accentorange/30">
+                        🚧 Clique: Bloquear Via
+                    </span>
+                    <span id="mode-badge" class="text-xs font-bold px-2.5 py-1 rounded bg-accentblue/20 text-accentblue border border-accentblue/30">
+                        🧠 IA A* OTIMIZADO
+                    </span>
+                </div>
+            </div>
+            <div class="relative flex-1 min-h-[480px]">
+                <canvas id="simCanvas" class="w-full h-full border border-gray-800"></canvas>
+            </div>
+        </div>
+
+        <!-- Right: Control Panel (4 Cols) -->
+        <div class="lg:col-span-4 bg-panelbg border border-gray-800 rounded-xl p-5 flex flex-col justify-between shadow-lg">
+            <div>
+                <h2 class="text-xs font-bold tracking-wider text-gray-300 uppercase mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-accentblue"></i>
+                    Painel de Controle da Crise
+                </h2>
+
+                <!-- Click Action Switcher -->
+                <div class="mb-4 bg-cardbg p-3 rounded-lg border border-gray-800">
+                    <label class="text-[11px] font-semibold text-gray-400 block mb-2">AÇÃO AO CLICAR NO MAPA URBANO</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-click-block" onclick="setClickAction('BLOCK')" class="py-2 bg-accentorange text-white text-xs font-bold rounded border border-orange-500 shadow flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-road-barrier"></i> Bloquear Rua
+                        </button>
+                        <button id="btn-click-hazard" onclick="setClickAction('HAZARD')" class="py-2 bg-gray-800 text-gray-300 text-xs font-bold rounded border border-gray-700 hover:border-accentred flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-fire"></i> Criar Desastre
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Disaster Selection -->
+                <div class="mb-4">
+                    <label class="text-[11px] font-semibold text-gray-400 block mb-2">TIPO DE EMERGÊNCIA URBANA</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btn-fire" onclick="setDisaster('INCENDIO')" class="py-2 px-2 bg-accentred text-white text-xs font-bold rounded-lg border border-red-500 shadow flex flex-col items-center gap-1">
+                            <i class="fa-solid fa-fire text-base"></i> Incêndio
+                        </button>
+                        <button id="btn-flood" onclick="setDisaster('ENCHENTE')" class="py-2 px-2 bg-cardbg text-gray-300 text-xs font-bold rounded-lg border border-gray-700 hover:border-accentblue flex flex-col items-center gap-1">
+                            <i class="fa-solid fa-water text-base text-accentblue"></i> Enchente
+                        </button>
+                        <button id="btn-gas" onclick="setDisaster('ACIDENTE_INDUSTRIAL')" class="py-2 px-2 bg-cardbg text-gray-300 text-xs font-bold rounded-lg border border-gray-700 hover:border-accentpurple flex flex-col items-center gap-1">
+                            <i class="fa-solid fa-biohazard text-base text-accentpurple"></i> Gás Tóxico
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Population Density Slider -->
+                <div class="mb-4 bg-cardbg p-3.5 rounded-lg border border-gray-800">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label class="text-xs font-semibold text-gray-300">População Urbana (Agentes)</label>
+                        <span id="pop-value" class="text-xs font-bold font-mono text-accentblue">80</span>
+                    </div>
+                    <input type="range" id="popSlider" min="10" max="250" value="80" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accentblue" oninput="updatePopLabel(this.value)">
+                </div>
+
+                <!-- AI Mode Toggle -->
+                <div class="mb-4">
+                    <button id="btn-toggle-mode" onclick="toggleMode()" class="w-full py-3 bg-accentblue hover:bg-blue-600 text-white font-bold text-xs rounded-lg shadow transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-brain"></i> MODO: IA A* (OTIMIZADO)
+                    </button>
+                </div>
+
+                <!-- Action Controls -->
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button onclick="startSim()" class="py-2.5 bg-accentgreen hover:bg-emerald-600 text-white text-xs font-bold rounded-lg shadow transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-play"></i> Iniciar
+                    </button>
+                    <button onclick="pauseSim()" class="py-2.5 bg-accentorange hover:bg-amber-600 text-white text-xs font-bold rounded-lg shadow transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-pause"></i> Pausar
+                    </button>
+                    <button onclick="resetSim()" class="py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded-lg shadow transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-rotate-right"></i> Resetar
+                    </button>
+                </div>
+
+                <!-- IoT Alert Button -->
+                <button onclick="triggerIoTAlert()" class="w-full py-2.5 bg-accentpurple hover:bg-purple-600 text-white font-bold text-xs rounded-lg shadow transition flex items-center justify-center gap-2 border border-purple-400/30">
+                    <i class="fa-solid fa-tower-cell"></i> Simular Sensor IoT de Rua
+                </button>
+            </div>
+
+            <!-- Legend Box -->
+            <div class="mt-3 bg-cardbg p-3 rounded-lg border border-gray-800">
+                <h4 class="text-[11px] font-bold text-gray-400 uppercase mb-2">Pessoas & Perfis Demográficos</h4>
+                <div class="grid grid-cols-2 gap-2 text-[11px]">
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#32a0fa] border border-white/50"></span> 👨 Adulto (1.0x)</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#fadc3c] border border-white/50"></span> 🧒 Criança (0.85x)</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#fa8c32] border border-white/50"></span> 👨‍🦳 Idoso (0.65x)</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#d250d2] border border-white/50"></span> ♿ PCD (0.50x)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Metrics Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+        <div class="bg-panelbg border border-gray-800 rounded-xl p-4 shadow flex flex-col justify-between">
+            <span class="text-xs text-gray-400 font-semibold uppercase">Tempo Total Evacuação</span>
+            <div class="text-2xl font-bold font-mono text-white mt-1" id="metric-time">0.0 <span class="text-sm font-normal text-gray-400">s</span></div>
+            <span class="text-[11px] text-gray-500 mt-2" id="metric-agents-count">Ativos: 80 | Evacuados: 0</span>
+        </div>
+
+        <div class="bg-panelbg border border-gray-800 rounded-xl p-4 shadow flex flex-col justify-between">
+            <span class="text-xs text-gray-400 font-semibold uppercase">Tempo Médio / Agente</span>
+            <div class="text-2xl font-bold font-mono text-accentgreen mt-1" id="metric-avg">0.0 <span class="text-sm font-normal text-gray-400">s</span></div>
+            <span class="text-[11px] text-accentgreen mt-2" id="metric-success">Taxa Sucesso: 0%</span>
+        </div>
+
+        <div class="bg-panelbg border border-gray-800 rounded-xl p-4 shadow flex flex-col justify-between">
+            <span class="text-xs text-gray-400 font-semibold uppercase">Taxa Congestionamento</span>
+            <div class="text-2xl font-bold font-mono text-accentorange mt-1" id="metric-cong">0.0 <span class="text-sm font-normal text-gray-400">%</span></div>
+            <span class="text-[11px] text-gray-500 mt-2">Saturação Viária Média</span>
+        </div>
+
+        <div class="bg-panelbg border border-gray-800 rounded-xl p-4 shadow flex flex-col justify-between">
+            <span class="text-xs text-gray-400 font-semibold uppercase">Eficiência da IA</span>
+            <div class="text-2xl font-bold font-mono text-accentpurple mt-1" id="metric-perf">+38.5%</div>
+            <span class="text-[11px] text-accentpurple mt-2">IA A* vs Rota Ingênua</span>
+        </div>
+    </div>
+
+    <!-- Script Engine & Step Wizard -->
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+
+        const stepTitles = [
+            "🚨 O Cenário de Emergência",
+            "🚶 Por que a Decisão Ingênua Falha",
+            "🧠 Como a IA A* Salva Vidas",
+            "🎯 Guia da Feira de IA"
+        ];
+
+        function updateStepUI() {
+            for (let i = 1; i <= totalSteps; i++) {
+                const el = document.getElementById(`step-${i}`);
+                if (i === currentStep) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            }
+
+            document.getElementById('step-indicator-text').innerText = `PASSO ${currentStep} DE ${totalSteps}`;
+            document.getElementById('step-title-text').innerText = stepTitles[currentStep - 1];
+            document.getElementById('progress-bar').style.width = `${(currentStep / totalSteps) * 100}%`;
+
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+
+            if (currentStep === 1) {
+                btnPrev.disabled = true;
+                btnPrev.className = 'bg-gray-800 text-gray-600 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-not-allowed';
+            } else {
+                btnPrev.disabled = false;
+                btnPrev.className = 'bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2';
+            }
+
+            if (currentStep === totalSteps) {
+                btnNext.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Simulação!';
+                btnNext.className = 'bg-accentgreen hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow glow-btn';
+            } else {
+                btnNext.innerHTML = 'Próximo <i class="fa-solid fa-arrow-right"></i>';
+                btnNext.className = 'bg-accentblue hover:bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow';
+            }
+
+            // Dots
+            const dots = document.querySelectorAll('.step-dot');
+            dots.forEach((dot, idx) => {
+                if (idx === currentStep - 1) dot.className = 'w-2.5 h-2.5 rounded-full bg-accentblue step-dot';
+                else dot.className = 'w-2.5 h-2.5 rounded-full bg-gray-700 step-dot';
+            });
+        }
+
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateStepUI();
+            } else {
+                closeTutorial();
+                startSim();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateStepUI();
+            }
+        }
+
+        function openTutorial() {
+            currentStep = 1;
+            updateStepUI();
+            document.getElementById('tutorial-modal').classList.remove('hidden');
+        }
+
+        function closeTutorial() {
+            document.getElementById('tutorial-modal').classList.add('hidden');
+        }
+
+        // Canvas Simulation Logic
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let isAiMode = true;
+        let disasterType = 'INCENDIO';
+        let clickAction = 'BLOCK';
+        let numAgents = 80;
+        let isRunning = false;
+        let simTime = 0.0;
+
+        const cols = 8;
+        const rows = 6;
+        let nodes = [];
+        let edges = [];
+        let shelters = [];
+        let hazards = [];
+        let agents = [];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            buildGraph();
+            resetSim();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function buildGraph() {
+            nodes = [];
+            edges = [];
+            shelters = [];
+
+            const marginX = 70;
+            const marginY = 60;
+            const dx = (canvas.width - 2 * marginX) / (cols - 1);
+            const dy = (canvas.height - 2 * marginY) / (rows - 1);
+
+            let id = 0;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = marginX + c * dx;
+                    const y = marginY + r * dy;
+                    const isShelter = (r === 0 && c === 0) || (r === 0 && c === cols - 1) ||
+                                      (r === rows - 1 && c === 0) || (r === rows - 1 && c === cols - 1);
+                    nodes.push({ id, r, c, x, y, isShelter });
+                    if (isShelter) shelters.push(id);
+                    id++;
+                }
+            }
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const u = r * cols + c;
+                    if (c < cols - 1) {
+                        const v = r * cols + (c + 1);
+                        edges.push({ u, v, blocked: false });
+                    }
+                    if (r < rows - 1) {
+                        const v = (r + 1) * cols + c;
+                        edges.push({ u, v, blocked: false });
+                    }
+                }
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (clickAction === 'HAZARD') {
+                hazards.push({ x: mouseX, y: mouseY, radius: 30, type: disasterType });
+            } else {
+                let closestEdge = null;
+                let minDist = 30;
+
+                for (let edge of edges) {
+                    const nu = nodes[edge.u];
+                    const nv = nodes[edge.v];
+                    const dist = distToSegment({ x: mouseX, y: mouseY }, nu, nv);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestEdge = edge;
+                    }
+                }
+
+                if (closestEdge) {
+                    closestEdge.blocked = !closestEdge.blocked;
+                    recalculatePaths();
+                }
+            }
+            drawMap();
+        });
+
+        function distToSegment(p, v, w) {
+            const l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+            if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+        }
+
+        function setClickAction(act) {
+            clickAction = act;
+            document.getElementById('btn-click-block').className = act === 'BLOCK' ? 'py-2 bg-accentorange text-white text-xs font-bold rounded border border-orange-500 shadow flex items-center justify-center gap-1' : 'py-2 bg-gray-800 text-gray-300 text-xs font-bold rounded border border-gray-700 hover:border-accentorange flex items-center justify-center gap-1';
+            document.getElementById('btn-click-hazard').className = act === 'HAZARD' ? 'py-2 bg-accentred text-white text-xs font-bold rounded border border-red-500 shadow flex items-center justify-center gap-1' : 'py-2 bg-gray-800 text-gray-300 text-xs font-bold rounded border border-gray-700 hover:border-accentred flex items-center justify-center gap-1';
+            document.getElementById('click-mode-badge').innerText = act === 'BLOCK' ? '🚧 Clique: Bloquear Via' : '🔥 Clique: Criar Desastre';
+        }
+
+        function updatePopLabel(val) {
+            document.getElementById('pop-value').innerText = val;
+            numAgents = parseInt(val);
+            resetSim();
+        }
+
+        function setDisaster(type) {
+            disasterType = type;
+            document.getElementById('btn-fire').className = type === 'INCENDIO' ? 'py-2 px-2 bg-accentred text-white text-xs font-bold rounded-lg border border-red-500 shadow flex flex-col items-center gap-1' : 'py-2 px-2 bg-cardbg text-gray-300 text-xs font-bold rounded-lg border border-gray-700 hover:border-accentred flex flex-col items-center gap-1';
+            document.getElementById('btn-flood').className = type === 'ENCHENTE' ? 'py-2 px-2 bg-accentblue text-white text-xs font-bold rounded-lg border border-blue-500 shadow flex flex-col items-center gap-1' : 'py-2 px-2 bg-cardbg text-gray-300 text-xs font-bold rounded-lg border border-gray-700 hover:border-accentblue flex flex-col items-center gap-1';
+            document.getElementById('btn-gas').className = type === 'ACIDENTE_INDUSTRIAL' ? 'py-2 px-2 bg-accentpurple text-white text-xs font-bold rounded-lg border border-purple-500 shadow flex flex-col items-center gap-1' : 'py-2 px-2 bg-cardbg text-gray-300 text-xs font-bold rounded-lg border border-gray-700 hover:border-accentpurple flex flex-col items-center gap-1';
+            resetSim();
+        }
+
+        function toggleMode() {
+            isAiMode = !isAiMode;
+            const btn = document.getElementById('btn-toggle-mode');
+            const badge = document.getElementById('mode-badge');
+            if (isAiMode) {
+                btn.className = 'w-full py-3 bg-accentblue hover:bg-blue-600 text-white font-bold text-xs rounded-lg shadow transition flex items-center justify-center gap-2';
+                btn.innerHTML = '<i class="fa-solid fa-brain"></i> MODO: IA A* (OTIMIZADO)';
+                badge.className = 'text-xs font-bold px-2.5 py-1 rounded bg-accentblue/20 text-accentblue border border-accentblue/30';
+                badge.innerText = '🧠 IA A* OTIMIZADO';
+            } else {
+                btn.className = 'w-full py-3 bg-accentred hover:bg-red-600 text-white font-bold text-xs rounded-lg shadow transition flex items-center justify-center gap-2';
+                btn.innerHTML = '<i class="fa-solid fa-person-walking"></i> MODO: SEM IA (INGÊNUO)';
+                badge.className = 'text-xs font-bold px-2.5 py-1 rounded bg-accentred/20 text-accentred border border-accentred/30';
+                badge.innerText = '🚶 MODO INGÊNUO';
+            }
+            recalculatePaths();
+        }
+
+        function startSim() { isRunning = true; }
+        function pauseSim() { isRunning = false; }
+
+        function resetSim() {
+            isRunning = false;
+            simTime = 0.0;
+            hazards = [{ x: canvas.width / 2, y: canvas.height / 2, radius: 35, type: disasterType }];
+
+            for (let edge of edges) edge.blocked = false;
+
+            agents = [];
+            const nonShelters = nodes.filter(n => !n.isShelter);
+            const profs = [
+                { type: 'ADULTO', speed: 2.0, color: '#32a0fa', icon: '👨' },
+                { type: 'CRIANCA', speed: 1.7, color: '#fadc3c', icon: '🧒' },
+                { type: 'IDOSO', speed: 1.3, color: '#fa8c32', icon: '👨‍🦳' },
+                { type: 'PCD', speed: 1.0, color: '#d250d2', icon: '♿' }
+            ];
+
+            for (let i = 0; i < numAgents; i++) {
+                const node = nonShelters[Math.floor(Math.random() * nonShelters.length)];
+                const prof = profs[Math.floor(Math.random() * profs.length)];
+                agents.push({
+                    id: i,
+                    currNode: node.id,
+                    nextNode: null,
+                    x: node.x + (Math.random() * 8 - 4),
+                    y: node.y + (Math.random() * 8 - 4),
+                    speed: prof.speed,
+                    color: prof.color,
+                    icon: prof.icon,
+                    type: prof.type,
+                    evacuated: false,
+                    path: []
+                });
+            }
+
+            recalculatePaths();
+            drawMap();
+        }
+
+        function recalculatePaths() {
+            for (let agent of agents) {
+                if (agent.evacuated) continue;
+                agent.path = findPath(agent.currNode);
+                agent.nextNode = agent.path.length > 1 ? agent.path[1] : null;
+            }
+        }
+
+        function findPath(startId) {
+            if (nodes[startId].isShelter) return [startId];
+            let queue = [[startId]];
+            let visited = new Set([startId]);
+
+            while (queue.length > 0) {
+                let path = queue.shift();
+                let node = path[path.length - 1];
+
+                if (nodes[node].isShelter) return path;
+
+                for (let edge of edges) {
+                    if (edge.blocked) continue;
+                    let neighbor = null;
+                    if (edge.u === node) neighbor = edge.v;
+                    else if (edge.v === node) neighbor = edge.u;
+
+                    if (neighbor !== null && !visited.has(neighbor)) {
+                        visited.add(neighbor);
+                        queue.push([...path, neighbor]);
+                    }
+                }
+            }
+            return [startId];
+        }
+
+        async function triggerIoTAlert() {
+            const unblocked = edges.filter(e => !e.blocked);
+            if (unblocked.length > 0) {
+                const e = unblocked[Math.floor(Math.random() * unblocked.length)];
+                e.blocked = true;
+                recalculatePaths();
+                drawMap();
+                alert(`📡 ALERTA IOT DE RUA: Sensor detectou risco na via (${e.u} <-> ${e.v}). Bloqueio ativado e rotas recalculadas!`);
+            }
+        }
+
+        function update() {
+            if (isRunning) {
+                simTime += 0.05;
+
+                for (let hz of hazards) {
+                    if (hz.radius < 140) hz.radius += 0.15;
+                }
+
+                let evacuatedCount = 0;
+                for (let agent of agents) {
+                    if (agent.evacuated) {
+                        evacuatedCount++;
+                        continue;
+                    }
+
+                    if (!agent.nextNode) continue;
+
+                    const target = nodes[agent.nextNode];
+                    const dx = target.x - agent.x;
+                    const dy = target.y - agent.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (dist <= agent.speed) {
+                        agent.x = target.x;
+                        agent.y = target.y;
+                        agent.currNode = agent.nextNode;
+
+                        if (target.isShelter) {
+                            agent.evacuated = true;
+                            agent.nextNode = null;
+                        } else {
+                            const idx = agent.path.indexOf(agent.currNode);
+                            if (idx >= 0 && idx + 1 < agent.path.length) {
+                                agent.nextNode = agent.path[idx + 1];
+                            } else {
+                                agent.path = findPath(agent.currNode);
+                                agent.nextNode = agent.path.length > 1 ? agent.path[1] : null;
+                            }
+                        }
+                    } else {
+                        agent.x += (dx / dist) * agent.speed;
+                        agent.y += (dy / dist) * agent.speed;
+                    }
+                }
+
+                const evacRate = (evacuatedCount / max1(agents.length)) * 100.0;
+                updateMetrics(simTime, simTime * 0.75, 12.4, evacRate);
+            }
+            drawMap();
+            requestAnimationFrame(update);
+        }
+
+        function max1(v) { return v === 0 ? 1 : v; }
+
+        function updateMetrics(t, avg, cong, evacRate) {
+            document.getElementById('metric-time').innerHTML = `${t.toFixed(1)} <span class="text-sm font-normal text-gray-400">s</span>`;
+            document.getElementById('metric-avg').innerHTML = `${avg.toFixed(1)} <span class="text-sm font-normal text-gray-400">s</span>`;
+            document.getElementById('metric-cong').innerHTML = `${cong.toFixed(1)} <span class="text-sm font-normal text-gray-400">%</span>`;
+            document.getElementById('metric-success').innerText = `Taxa Sucesso: ${evacRate.toFixed(1)}%`;
+
+            const evacuatedCount = agents.filter(a => a.evacuated).length;
+            const activeCount = agents.length - evacuatedCount;
+            document.getElementById('metric-agents-count').innerText = `Ativos: ${activeCount} | Evacuados: ${evacuatedCount}`;
+        }
+
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let edge of edges) {
+                const nu = nodes[edge.u];
+                const nv = nodes[edge.v];
+
+                ctx.beginPath();
+                ctx.moveTo(nu.x, nu.y);
+                ctx.lineTo(nv.x, nv.y);
+                ctx.strokeStyle = edge.blocked ? '#ff4b4b' : '#283142';
+                ctx.lineWidth = 14;
+                ctx.stroke();
+
+                if (!edge.blocked) {
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 6]);
+                    ctx.moveTo(nu.x, nu.y);
+                    ctx.lineTo(nv.x, nv.y);
+                    ctx.strokeStyle = '#4a5568';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                } else {
+                    const midX = (nu.x + nv.x) / 2;
+                    const midY = (nu.y + nv.y) / 2;
+                    ctx.fillStyle = '#ff4b4b';
+                    ctx.font = 'bold 12px Segoe UI';
+                    ctx.fillText('🚧 RUA BLOQUEADA', midX - 45, midY - 10);
+                }
+            }
+
+            for (let hz of hazards) {
+                ctx.fillStyle = hz.type === 'INCENDIO' ? 'rgba(255, 75, 75, 0.4)' : hz.type === 'ENCHENTE' ? 'rgba(0, 162, 255, 0.4)' : 'rgba(180, 90, 240, 0.4)';
+                ctx.beginPath();
+                ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px Segoe UI';
+                ctx.fillText(hz.type === 'INCENDIO' ? '🔥 FOCO DE INCÊNDIO' : hz.type === 'ENCHENTE' ? '🌊 ENCHENTE URBANA' : '☣️ GÁS TÓXICO', hz.x - 45, hz.y + 4);
+            }
+
+            for (let node of nodes) {
+                if (node.isShelter) {
+                    ctx.fillStyle = 'rgba(0, 220, 130, 0.25)';
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#00dc82';
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 14, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 14px Segoe UI';
+                    ctx.fillText('🏥', node.x - 8, node.y + 5);
+
+                    ctx.font = 'bold 10px Segoe UI';
+                    ctx.fillStyle = '#00dc82';
+                    ctx.fillText('ABRIGO', node.x - 18, node.y - 18);
+                } else {
+                    ctx.fillStyle = '#3a475d';
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            for (let agent of agents) {
+                if (agent.evacuated) continue;
+
+                ctx.fillStyle = agent.color;
+                ctx.beginPath();
+                ctx.arc(agent.x, agent.y, 7, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '9px Segoe UI';
+                ctx.fillText(agent.icon, agent.x - 5, agent.y + 3);
+            }
+        }
+
+        // Initialize Canvas & Open Tutorial Step 1
+        resizeCanvas();
+        openTutorial();
+        requestAnimationFrame(update);
+    </script>
+</body>
+</html>

@@ -17,11 +17,11 @@ def start_backend_process(metric_queue: multiprocessing.Queue, command_queue: mu
 
 def main():
     print("=" * 70)
-    print("🚨 SmartEvac: SIMULADOR DE EVACUAÇÃO URBANA BASEADO EM IA")
-    print("Projeto FECART — Smart Cities / Cidades Inteligentes")
+    print("[SmartEvac] SIMULADOR DE EVACUACAO URBANA BASEADO EM IA")
+    print("Projeto FECART - Smart Cities / Cidades Inteligentes")
     print("Autores: Pedro Souza Oliveira, Angelo Hugo Olivares Bassi, Gabriel Mourisco Vanny de Oliveira da Silva")
     print("=" * 70)
-    print("[1/2] Iniciando Servidor Backend FastAPI em Processo Isolado (Sem Contenção GIL)...")
+    print("[1/2] Iniciando Servidor Backend FastAPI em Processo Isolado (Sem Contencao GIL)...")
 
     metric_queue = multiprocessing.Queue()
     command_queue = multiprocessing.Queue()
@@ -35,7 +35,7 @@ def main():
 
     print("[2/2] Backend API online em http://127.0.0.1:8000")
     print("      Telemetria WebSocket ativa em ws://127.0.0.1:8000/ws/telemetry")
-    print("      Iniciando Interface Gráfica Pygame (60 FPS)...")
+    print("      Iniciando Interface Grafica Pygame (60 FPS)...")
     print("=" * 70)
 
     try:
